@@ -1,0 +1,611 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Hotel Ordering System</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f5f2;color:#202820;font-family:Arial,sans-serif}
+header{background:#145b3b;color:white;padding:22px 12px;text-align:center}
+header h1{margin:0 0 8px}
+nav{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;padding:12px;background:#fff;position:sticky;top:0;z-index:5}
+nav button{background:#e5eee8;color:#145b3b;padding:11px 14px;border:0;border-radius:8px;font-weight:bold}
+nav button.active{background:#145b3b;color:white}
+main{max-width:750px;margin:18px auto;padding:0 12px}
+.card{background:white;padding:17px;margin-bottom:15px;border-radius:13px;box-shadow:0 2px 9px #0001}
+h2{color:#145b3b;margin-top:5px}
+input,select,textarea{width:100%;padding:12px;margin:7px 0 14px;border:1px solid #bbb;border-radius:8px;font-size:16px;background:white}
+button{cursor:pointer}
+.primary{background:#176b45;color:white;border:0;padding:13px;border-radius:8px;font-weight:bold}
+.danger{background:#b52d2d;color:white;border:0;padding:9px;border-radius:7px}
+.secondary{background:#e5eee8;color:#145b3b;border:0;padding:9px;border-radius:7px}
+.full{width:100%}
+.hidden{display:none!important}
+.food{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid #eee}
+.food-info{flex:1;min-width:0}
+.food-name{font-weight:bold}
+.food-category{font-size:12px;color:#777;margin-top:4px}
+.price{color:#176b45;font-weight:bold;margin-top:5px}
+.quantity{display:flex;align-items:center;gap:9px}
+.quantity button{width:36px;height:36px;border:0;border-radius:8px;background:#176b45;color:white;font-size:22px}
+.quantity span{min-width:20px;text-align:center;font-weight:bold}
+.total{background:#e7f4eb;padding:16px;border-radius:9px;margin:15px 0;font-size:21px;font-weight:bold}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.order{border:1px solid #ddd;padding:13px;border-radius:9px;margin:12px 0}
+.status{display:inline-block;padding:5px 9px;background:#fff0c9;border-radius:7px;font-size:12px}
+.small{font-size:13px;color:#666}
+.notice{padding:12px;border-radius:8px;background:#edf5ef;margin:10px 0;white-space:pre-wrap}
+#message{white-space:pre-wrap;line-height:1.5;font-weight:bold}
+@media(max-width:400px){nav button{padding:10px;font-size:13px}.food{gap:5px}}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>🍽️ QR HOTEL</h1>
+<p>Smart Ordering • Faster Service</p>
+</header>
+
+<nav>
+<button class="active" data-page="customer">Customer Menu</button>
+<button data-page="owner">Owner</button>
+<button data-page="kitchen">Kitchen</button>
+</nav>
+
+<main>
+
+<!-- CUSTOMER MENU -->
+<section id="customer">
+<div class="card">
+<h2>Welcome! Place Your Order</h2>
+
+<label>Table Number</label>
+<input id="tableNumber" type="number" min="1" step="1" placeholder="Enter table number">
+
+<h3>Our Menu</h3>
+<div id="customerMenu">Loading menu...</div>
+
+<h3>Your Order</h3>
+<div id="cart">
+<p class="small">Your basket is empty.</p>
+</div>
+
+<div class="total" id="grandTotal">Total: KSh 0</div>
+
+<label>Special Instructions</label>
+<textarea id="instructions" rows="3" placeholder="e.g. No onions, less salt"></textarea>
+
+<button class="primary full" id="submitOrder">SEND ORDER TO KITCHEN</button>
+<p id="message"></p>
+</div>
+</section>
+
+<!-- OWNER DASHBOARD -->
+<section id="owner" class="hidden">
+<div class="card">
+<h2>⚙️ Hotel Owner Dashboard</h2>
+<p>Add new foods, drinks and prices to your menu.</p>
+
+<form id="menuForm">
+<input type="hidden" id="editId">
+
+<label>Food or Drink Name</label>
+<input id="itemName" required placeholder="e.g. Fresh juice">
+
+<label>Category</label>
+<select id="itemCategory">
+<option>Food</option>
+<option>Drinks</option>
+<option>Breakfast</option>
+<option>Snacks</option>
+<option>Other</option>
+</select>
+
+<label>Selling Price (KSh)</label>
+<input id="itemPrice" type="number" min="1" step="0.01" required placeholder="e.g. 150">
+
+<button class="primary full" id="saveItem">ADD TO MENU</button>
+<button type="button" class="secondary full hidden" id="cancelEdit">CANCEL EDIT</button>
+</form>
+<p id="ownerMessage"></p>
+</div>
+
+<div class="card">
+<h2>Manage Menu</h2>
+<div id="ownerMenu">Loading...</div>
+</div>
+
+<div class="card">
+<h2>Hotel Summary</h2>
+<button class="secondary full" id="refreshOwner">Refresh Menu</button>
+<p id="menuCount">Menu items: 0</p>
+</div>
+</section>
+
+<!-- KITCHEN DASHBOARD -->
+<section id="kitchen" class="hidden">
+<div class="card">
+<h2>👨‍🍳 Kitchen Orders</h2>
+<p>See incoming orders and update their status.</p>
+<button class="primary full" id="refreshKitchen">REFRESH ORDERS</button>
+<div id="kitchenOrders">Loading orders...</div>
+</div>
+</section>
+
+</main>
+
+<script>
+// =================================
+// 1. SUPABASE CONNECTION
+// =================================
+
+// Replace these with your own Supabase details.
+const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL";
+const SUPABASE_KEY = "PASTE_YOUR_PUBLISHABLE_KEY";
+
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+// =================================
+// 2. APPLICATION DATA
+// =================================
+
+let products = [];
+let cart = {};
+
+const money = n => "KSh " + Number(n).toLocaleString("en-KE",{
+  maximumFractionDigits:2
+});
+
+function safeText(value){
+  return String(value ?? "").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#39;"
+  })[c]);
+}
+
+function showMessage(id,text){
+  document.getElementById(id).textContent = text;
+}
+
+// =================================
+// 3. NAVIGATION
+// =================================
+
+document.querySelectorAll("nav button").forEach(button=>{
+  button.addEventListener("click",()=>{
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+    button.classList.add("active");
+
+    ["customer","owner","kitchen"].forEach(page=>{
+      document.getElementById(page).classList.toggle(
+        "hidden",page!==button.dataset.page
+      );
+    });
+
+    if(button.dataset.page==="kitchen") loadOrders();
+    if(button.dataset.page==="owner") renderOwnerMenu();
+  });
+});
+
+// =================================
+// 4. LOAD MENU FROM SUPABASE
+// =================================
+
+async function loadMenu(){
+  const customer = document.getElementById("customerMenu");
+  const owner = document.getElementById("ownerMenu");
+
+  customer.textContent = "Loading menu...";
+  owner.textContent = "Loading menu...";
+
+  try{
+    const {data,error}=await db
+      .from("menu_items")
+      .select("*")
+      .order("id",{ascending:true});
+
+    if(error) throw error;
+
+    products=(data||[]).filter(p=>
+      p.available!==false
+    );
+
+    renderCustomerMenu();
+    renderOwnerMenu();
+
+    document.getElementById("menuCount").textContent=
+      "Available menu items: "+products.length;
+
+  }catch(error){
+    customer.textContent="Could not load menu: "+error.message;
+    owner.textContent="Could not load menu: "+error.message;
+  }
+}
+
+// =================================
+// 5. CUSTOMER MENU
+// =================================
+
+function renderCustomerMenu(){
+  const box=document.getElementById("customerMenu");
+
+  if(!products.length){
+    box.textContent="No food items available yet. Please check again later.";
+    return;
+  }
+
+  box.innerHTML="";
+
+  products.forEach(p=>{
+    const id=String(p.id);
+
+    const div=document.createElement("div");
+    div.className="food";
+
+    div.innerHTML=`
+      <div class="food-info">
+        <div class="food-name">${safeText(p.name)}</div>
+        <div class="food-category">${safeText(p.category)}</div>
+        <div class="price">${money(p.price)}</div>
+      </div>
+      <div class="quantity">
+        <button type="button" aria-label="Decrease">−</button>
+        <span>${cart[id]||0}</span>
+        <button type="button" aria-label="Increase">+</button>
+      </div>
+    `;
+
+    const buttons=div.querySelectorAll("button");
+
+    buttons[0].addEventListener("click",()=>changeQuantity(id,-1));
+    buttons[1].addEventListener("click",()=>changeQuantity(id,1));
+
+    box.appendChild(div);
+  });
+}
+
+// =================================
+// 6. QUANTITY AND CART
+// =================================
+
+function changeQuantity(id,change){
+  cart[id]=Math.max(0,(cart[id]||0)+change);
+  renderCustomerMenu();
+  renderCart();
+}
+
+function getCartItems(){
+  return products.filter(p=>(cart[String(p.id)]||0)>0).map(p=>({
+    menu_item_id:p.id,
+    name:p.name,
+    price:Number(p.price),
+    quantity:cart[String(p.id)],
+    subtotal:Number(p.price)*cart[String(p.id)]
+  }));
+}
+
+function renderCart(){
+  const box=document.getElementById("cart");
+  const items=getCartItems();
+
+  if(!items.length){
+    box.innerHTML='<p class="small">Your basket is empty.</p>';
+  }else{
+    box.innerHTML=items.map(item=>`
+      <div class="food">
+        <div class="food-info">
+          <b>${safeText(item.name)}</b>
+          <div class="small">${item.quantity} × ${money(item.price)}</div>
+        </div>
+        <b>${money(item.subtotal)}</b>
+      </div>
+    `).join("");
+  }
+
+  const total=items.reduce((sum,item)=>sum+item.subtotal,0);
+  document.getElementById("grandTotal").textContent=
+    "Total: "+money(total);
+}
+
+// =================================
+// 7. SEND CUSTOMER ORDER
+// =================================
+
+document.getElementById("submitOrder").addEventListener("click",async()=>{
+  const table=document.getElementById("tableNumber").value;
+  const notes=document.getElementById("instructions").value.trim();
+  const items=getCartItems();
+  const message=document.getElementById("message");
+  const button=document.getElementById("submitOrder");
+
+  if(!table||!Number.isInteger(Number(table))||Number(table)<1){
+    message.textContent="Please enter a valid table number.";
+    return;
+  }
+
+  if(!items.length){
+    message.textContent="Please add food or drinks first.";
+    return;
+  }
+
+  const total=items.reduce((sum,item)=>sum+item.subtotal,0);
+
+  button.disabled=true;
+  button.textContent="Sending order...";
+
+  try{
+    const {error}=await db.from("orders").insert([{
+      table_number:Number(table),
+      items:items,
+      total_amount:total,
+      status:"pending"
+    }]);
+
+    if(error) throw error;
+
+    message.textContent=
+      "✅ ORDER RECEIVED!\n"+
+      "Table: "+table+"\n"+
+      items.map(i=>i.name+" × "+i.quantity).join("\n")+
+      "\nTotal: "+money(total)+
+      (notes?"\nInstructions: "+notes:"")+
+      "\nThank you for ordering!";
+
+    cart={};
+    renderCustomerMenu();
+    renderCart();
+    document.getElementById("instructions").value="";
+    
+    // Note: special instructions are shown to the customer
+    // but are not yet stored in the orders table.
+
+  }catch(error){
+    message.textContent="Order failed: "+error.message;
+  }finally{
+    button.disabled=false;
+    button.textContent="SEND ORDER TO KITCHEN";
+  }
+});
+
+// =================================
+// 8. OWNER: ADD MENU ITEM
+// =================================
+
+document.getElementById("menuForm").addEventListener("submit",async event=>{
+  event.preventDefault();
+
+  const id=document.getElementById("editId").value;
+  const item={
+    name:document.getElementById("itemName").value.trim(),
+    category:document.getElementById("itemCategory").value,
+    price:Number(document.getElementById("itemPrice").value)
+  };
+
+  if(!item.name||!Number.isFinite(item.price)||item.price<=0){
+    showMessage("ownerMessage","Enter a valid name and price.");
+    return;
+  }
+
+  const button=document.getElementById("saveItem");
+  button.disabled=true;
+
+  try{
+    let result;
+
+    if(id){
+      result=await db.from("menu_items").update(item).eq("id",id);
+    }else{
+      result=await db.from("menu_items").insert([item]);
+    }
+
+    if(result.error) throw result.error;
+
+    showMessage("ownerMessage",id?"Menu item updated!":"New menu item added!");
+
+    resetForm();
+    await loadMenu();
+
+  }catch(error){
+    showMessage("ownerMessage","Could not save item: "+error.message);
+  }finally{
+    button.disabled=false;
+  }
+});
+
+// =================================
+// 9. OWNER: EDIT AND DELETE
+// =================================
+
+function renderOwnerMenu(){
+  const box=document.getElementById("ownerMenu");
+
+  if(!products.length){
+    box.textContent="No menu items yet. Add your first item above.";
+    return;
+  }
+
+  box.innerHTML="";
+
+  products.forEach(p=>{
+    const div=document.createElement("div");
+    div.className="food";
+
+    const info=document.createElement("div");
+    info.className="food-info";
+    info.innerHTML=`
+      <b>${safeText(p.name)}</b>
+      <div class="small">${safeText(p.category)}</div>
+      <div class="price">${money(p.price)}</div>
+    `;
+
+    const actions=document.createElement("div");
+    actions.className="row";
+
+    const edit=document.createElement("button");
+    edit.className="secondary";
+    edit.textContent="Edit";
+    edit.addEventListener("click",()=>editItem(p));
+
+    const remove=document.createElement("button");
+    remove.className="danger";
+    remove.textContent="Delete";
+    remove.addEventListener("click",()=>deleteItem(p));
+
+    actions.append(edit,remove);
+    div.append(info,actions);
+    box.appendChild(div);
+  });
+}
+
+function editItem(p){
+  document.getElementById("editId").value=p.id;
+  document.getElementById("itemName").value=p.name;
+  document.getElementById("itemCategory").value=p.category||"Other";
+  document.getElementById("itemPrice").value=p.price;
+  document.getElementById("saveItem").textContent="UPDATE MENU ITEM";
+  document.getElementById("cancelEdit").classList.remove("hidden");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function resetForm(){
+  document.getElementById("menuForm").reset();
+  document.getElementById("editId").value="";
+  document.getElementById("saveItem").textContent="ADD TO MENU";
+  document.getElementById("cancelEdit").classList.add("hidden");
+}
+
+document.getElementById("cancelEdit").addEventListener("click",resetForm);
+
+async function deleteItem(p){
+  if(!confirm("Delete "+p.name+" from the menu?"))return;
+
+  try{
+    const {error}=await db.from("menu_items").delete().eq("id",p.id);
+    if(error) throw error;
+
+    delete cart[String(p.id)];
+    showMessage("ownerMessage","Menu item deleted.");
+    await loadMenu();
+    renderCart();
+
+  }catch(error){
+    showMessage("ownerMessage","Delete failed: "+error.message);
+  }
+}
+
+// =================================
+// 10. KITCHEN DASHBOARD
+// =================================
+
+async function loadOrders(){
+  const box=document.getElementById("kitchenOrders");
+  box.textContent="Loading orders...";
+
+  try{
+    const {data,error}=await db
+      .from("orders")
+      .select("*")
+      .order("created_at",{ascending:false})
+      .limit(100);
+
+    if(error) throw error;
+
+    if(!data.length){
+      box.textContent="No orders received yet.";
+      return;
+    }
+
+    box.innerHTML="";
+
+    data.forEach(order=>{
+      const div=document.createElement("div");
+      div.className="order";
+
+      const items=Array.isArray(order.items)?order.items:[];
+
+      const details=items.map(i=>
+        safeText(i.name)+" × "+safeText(i.quantity)
+      ).join("<br>");
+
+      const time=order.created_at?
+        new Date(order.created_at).toLocaleString():"";
+
+      div.innerHTML=`
+        <h3>Table ${safeText(order.table_number)}</h3>
+        <span class="status">${safeText(order.status)}</span>
+        <p>${details||"Items not recorded"}</p>
+        <b>Total: ${money(order.total_amount)}</b>
+        <p class="small">${safeText(time)}</p>
+        <select aria-label="Update order status">
+          <option value="pending">Pending</option>
+          <option value="preparing">Preparing</option>
+          <option value="ready">Ready</option>
+          <option value="served">Served</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button class="primary full">UPDATE ORDER STATUS</button>
+      `;
+
+      const select=div.querySelector("select");
+      const update=div.querySelector("button");
+
+      select.value=order.status||"pending";
+
+      update.addEventListener("click",async()=>{
+        update.disabled=true;
+
+        try{
+          const {error}=await db.from("orders")
+            .update({status:select.value})
+            .eq("id",order.id);
+
+          if(error)throw error;
+
+          await loadOrders();
+
+        }catch(error){
+          alert("Status update failed: "+error.message);
+          update.disabled=false;
+        }
+      });
+
+      box.appendChild(div);
+    });
+
+  }catch(error){
+    box.textContent="Could not load orders: "+error.message;
+  }
+}
+
+// =================================
+// 11. REFRESH BUTTONS
+// =================================
+
+document.getElementById("refreshOwner").addEventListener("click",loadMenu);
+document.getElementById("refreshKitchen").addEventListener("click",loadOrders);
+
+// =================================
+// 12. START APPLICATION
+// =================================
+
+renderCart();
+
+if(SUPABASE_URL.startsWith("https://") &&
+   !SUPABASE_KEY.startsWith("PASTE_")){
+  loadMenu();
+}else{
+  document.getElementById("customerMenu").textContent=
+    "Please configure your Supabase URL and publishable key.";
+}
+</script>
+</body>
+</html>
