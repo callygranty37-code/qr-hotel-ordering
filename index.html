@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Hotel Ordering System</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial;background:#f2f5f2;margin:0;color:#222}
+header{background:#14532d;color:white;padding:22px;text-align:center}
+main{max-width:650px;margin:auto;padding:15px}
+.card{background:white;padding:15px;margin:12px 0;border-radius:12px}
+.item{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ddd;padding:12px 0;gap:8px}
+button{background:#15803d;color:white;border:0;padding:10px 15px;border-radius:7px;font-weight:bold}
+button.minus{background:#555}
+input,textarea{width:100%;padding:12px;margin-top:8px;border:1px solid #ccc;border-radius:7px}
+.qty{display:flex;align-items:center;gap:10px}
+h2{color:#166534}
+.total{font-size:23px;font-weight:bold;color:#166534}
+</style>
+</head>
+<body>
+<header>
+<h1>QR HOTEL ORDERING</h1>
+<p>Welcome! Order your favourite food and drinks.</p>
+</header>
+
+<main>
+<div class="card">
+<h2>Food Menu</h2>
+<div id="food"></div>
+</div>
+
+<div class="card">
+<h2>Drinks Menu</h2>
+<div id="drinks"></div>
+</div>
+
+<div class="card">
+<h2>Your Order</h2>
+<div id="cart">No items added yet.</div>
+<p class="total">Total: KSh <span id="total">0</span></p>
+
+<label>Table Number</label>
+<input id="table" type="number" min="1" placeholder="Enter table number">
+
+<label>Special Instructions</label>
+<textarea id="notes" placeholder="Any special requests?"></textarea>
+
+<button onclick="sendOrder()" style="width:100%;margin-top:15px">
+Send Order
+</button>
+</div>
+</main>
+
+<script>
+const products=[
+{name:"Chips",price:150,category:"food"},
+{name:"Chicken",price:350,category:"food"},
+{name:"Beef",price:300,category:"food"},
+{name:"Rice",price:150,category:"food"},
+{name:"Ugali",price:50,category:"food"},
+{name:"Fish",price:400,category:"food"},
+{name:"Soda",price:80,category:"drinks"},
+{name:"Water",price:50,category:"drinks"},
+{name:"Juice",price:120,category:"drinks"},
+{name:"Tea",price:50,category:"drinks"}
+];
+
+let cart={};
+
+function showMenu(category,id){
+document.getElementById(id).innerHTML=products
+.filter(p=>p.category===category)
+.map(p=>`
+<div class="item">
+<div><b>${p.name}</b><br>KSh ${p.price}</div>
+<button onclick="addItem('${p.name}')">Add +</button>
+</div>`).join("");
+}
+
+function addItem(name){
+cart[name]=(cart[name]||0)+1;
+updateCart();
+}
+
+function changeQty(name,amount){
+cart[name]+=amount;
+if(cart[name]<=0)delete cart[name];
+updateCart();
+}
+
+function updateCart(){
+let names=Object.keys(cart);
+let total=0;
+if(names.length===0){
+document.getElementById("cart").innerHTML="No items added yet.";
+}else{
+document.getElementById("cart").innerHTML=names.map(name=>{
+let p=products.find(x=>x.name===name);
+let subtotal=p.price*cart[name];
+total+=subtotal;
+return `<div class="item">
+<div>${name}<br>KSh ${subtotal}</div>
+<div class="qty">
+<button class="minus" onclick="changeQty('${name}',-1)">−</button>
+<b>${cart[name]}</b>
+<button onclick="changeQty('${name}',1)">+</button>
+</div>
+</div>`;
+}).join("");
+}
+document.getElementById("total").textContent=total;
+}
+
+function sendOrder(){
+let table=document.getElementById("table").value;
+if(!table){alert("Please enter table number");return;}
+if(Object.keys(cart).length===0){alert("Please add food or drinks");return;}
+let order=Object.keys(cart).map(name=>{
+let p=products.find(x=>x.name===name);
+return `${name} x ${cart[name]} = KSh ${p.price*cart[name]}`;
+}).join("\n");
+let total=document.getElementById("total").textContent;
+alert("Order prepared!\nTable: "+table+"\n"+order+"\nTotal: KSh "+total+"\n\nKitchen connection will be activated in the next setup.");
+}
+showMenu("food","food");
+showMenu("drinks","drinks");
+</script>
+</body>
+</html>
