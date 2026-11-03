@@ -31,6 +31,7 @@ footer{text-align:center;padding:20px;color:#666}
 </style>
 </head>
 <body>
+
 <header>
 <h1>QR HOTEL ORDERING</h1>
 <p>Welcome! Order your favourite food and drinks.</p>
@@ -46,10 +47,12 @@ footer{text-align:center;padding:20px;color:#666}
 <h2>🍽️ Food Menu</h2>
 <div id="food"></div>
 </div>
+
 <div class="card">
 <h2>🥤 Drinks Menu</h2>
 <div id="drinks"></div>
 </div>
+
 <div class="card">
 <h2>🛒 Your Order</h2>
 <div id="cart">No items added yet.</div>
@@ -76,7 +79,7 @@ footer{text-align:center;padding:20px;color:#666}
 
 <script>
 const SUPABASE_URL="https://atagmpwyrhjobqujocfz.supabase.co";
-const SUPABASE_KEY="sb_publishable_YkgXx03LGRK9cXWXSY3LGQ_pt9pimjo";
+const SUPABASE_KEY="sb_publishable_YkgXx03LGR9KcXWXSY3LGQ_pt9pimjo";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 const products=[
@@ -125,6 +128,7 @@ updateCart();
 function updateCart(){
 const names=Object.keys(cart);
 let total=0;
+
 if(names.length===0){
 document.getElementById("cart").innerHTML="No items added yet.";
 }else{
@@ -138,7 +142,8 @@ return `<div class="item">
 <button class="minus" onclick="changeQty('${name}',-1)">−</button>
 <strong>${cart[name]}</strong>
 <button onclick="changeQty('${name}',1)">+</button>
-</div></div>`;
+</div>
+</div>`;
 }).join("");
 }
 document.getElementById("total").textContent=total;
@@ -167,6 +172,7 @@ price:p.price,
 subtotal:p.price*cart[name]
 };
 });
+
 const total=items.reduce((sum,item)=>sum+item.subtotal,0);
 
 button.disabled=true;
@@ -175,7 +181,7 @@ button.textContent="Sending order...";
 try{
 const {data:order,error}=await db.from("orders").insert([{
 table_number:String(table),
-status:"pending",
+status:"received",
 items:{lines:items,notes:notes},
 total:total,
 total_amount:total
@@ -195,13 +201,14 @@ const result=await db.from("order_items").insert(orderItems);
 if(result.error)throw result.error;
 
 alert("Order sent successfully!\nTable: "+table+"\nTotal: KSh "+total);
+
 cart={};
 document.getElementById("table").value="";
 document.getElementById("notes").value="";
 updateCart();
 
 }catch(error){
-alert("Order error: "+error.message+"\nPlease check Supabase permissions and table columns.");
+alert("Order error: "+error.message);
 }finally{
 button.disabled=false;
 button.textContent="Send Order";
@@ -211,25 +218,33 @@ button.textContent="Send Order";
 async function loadOrders(){
 const area=document.getElementById("orders");
 area.textContent="Loading orders...";
-const {data,error}=await db.from("orders").select("*").order("created_at",{ascending:false});
+
+const {data,error}=await db.from("orders")
+.select("*").order("created_at",{ascending:false});
+
 if(error){
 area.textContent="Could not load orders: "+error.message;
 return;
 }
+
 if(!data||data.length===0){
 area.textContent="No orders received yet.";
 return;
 }
+
 area.innerHTML=data.map(order=>{
 let lines=[];
 let notes="";
+
 if(Array.isArray(order.items)){
 lines=order.items;
 }else if(order.items){
 lines=order.items.lines||[];
 notes=order.items.notes||"";
 }
+
 const total=order.total??order.total_amount??0;
+
 return `<div class="order">
 <h3>Order #${order.id}</h3>
 <p><strong>Table:</strong> ${order.table_number}</p>
@@ -240,11 +255,9 @@ ${notes?`<p><strong>Instructions:</strong> ${notes}</p>`:""}
 <p><strong>Total: KSh ${total}</strong></p>
 <label>Update order status</label>
 <select id="status-${order.id}">
-<option value="pending" ${order.status==="pending"?"selected":""}>Pending</option>
+<option value="received" ${order.status==="received"?"selected":""}>Received</option>
 <option value="preparing" ${order.status==="preparing"?"selected":""}>Preparing</option>
 <option value="ready" ${order.status==="ready"?"selected":""}>Ready</option>
-<option value="served" ${order.status==="served"?"selected":""}>Served</option>
-<option value="cancelled" ${order.status==="cancelled"?"selected":""}>Cancelled</option>
 </select>
 <button onclick="updateStatus(${order.id})">Save Status</button>
 </div>`;
@@ -253,11 +266,15 @@ ${notes?`<p><strong>Instructions:</strong> ${notes}</p>`:""}
 
 async function updateStatus(id){
 const status=document.getElementById("status-"+id).value;
-const {error}=await db.from("orders").update({status:status}).eq("id",id);
+
+const {error}=await db.from("orders")
+.update({status:status}).eq("id",id);
+
 if(error){
 alert("Status update failed: "+error.message);
 return;
 }
+
 alert("Order status updated.");
 loadOrders();
 }
