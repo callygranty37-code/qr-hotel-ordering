@@ -77,7 +77,7 @@ footer{text-align:center;padding:20px;color:#666}
 
 <script>
 const SUPABASE_URL="https://atagmpwyrhjobqujocfz.supabase.co";
-const SUPABASE_KEY="sb_publishable_YkgXx03LGR9KcXWXSY3LGQ_pt9pimjo";
+const SUPABASE_KEY="sb_publishable_Fk95Hce4zfpUr2l6zGiZzg_JO-JMAZA";
 
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
@@ -157,7 +157,6 @@ if(!table||Number(table)<1){
 alert("Please enter your table number.");
 return;
 }
-
 if(!Object.keys(cart).length){
 alert("Please add food or drinks first.");
 return;
@@ -200,7 +199,7 @@ subtotal:item.subtotal
 const result=await db.from("order_items").insert(orderItems);
 if(result.error)throw result.error;
 
-alert("Order sent successfully! Table: "+table+" Total: KSh "+total);
+alert("Order sent successfully!\nTable: "+table+"\nTotal: KSh "+total);
 
 cart={};
 document.getElementById("table").value="";
